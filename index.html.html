@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Linear Regression — Two Features</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+  }
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6; /* points */
+    --series-2:       #eb6834; /* fitted plane */
+    --residual-line:  rgba(11,11,11,0.55); /* neutral annotation, not a data series */
+    --series-1-soft:  #cde2fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --residual-line:  rgba(255,255,255,0.55);
+      --series-1-soft:  #184f95;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --residual-line:  rgba(255,255,255,0.55);
+    --series-1-soft:  #184f95;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--page-plane);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .viz-root {
+    background: var(--page-plane);
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .frame {
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+  header.top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 4px 0;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    max-width: 640px;
+    line-height: 1.5;
+    margin: 0;
+  }
+  .theme-toggle {
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+    color: var(--text-secondary);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .theme-toggle:hover { color: var(--text-primary); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 16px;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  #plot-card { padding: 8px; }
+  #plot { width: 100%; height: 560px; }
+
+  .reveal-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px 6px 12px;
+    flex-wrap: wrap;
+  }
+  .step-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .step-label b { color: var(--text-primary); }
+  button.reveal-btn {
+    border: 1px solid var(--series-1);
+    background: var(--series-1);
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button.reveal-btn:hover { opacity: 0.92; }
+  button.reveal-btn.is-shown {
+    background: transparent;
+    color: var(--text-primary);
+    border-color: var(--border);
+  }
+
+  .panel { padding: 16px; display: flex; flex-direction: column; gap: 18px; }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 10px 0;
+  }
+
+  .control { margin-bottom: 12px; }
+  .control:last-child { margin-bottom: 0; }
+  .control label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+  .control label span.val {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--series-1);
+  }
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .checkbox-row input { accent-color: var(--series-1); }
+
+  .btn-row { display: flex; gap: 8px; }
+  button.action {
+    flex: 1;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  button.action:hover { background: var(--gridline); }
+  button.action.primary {
+    background: var(--series-1);
+    border-color: var(--series-1);
+    color: #ffffff;
+  }
+  button.action.primary:hover { opacity: 0.92; }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    padding: 5px 0;
+    border-bottom: 1px solid var(--gridline);
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .stat-val {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+
+  .eq {
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-primary);
+    background: var(--page-plane);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .eq .label { color: var(--text-muted); font-variant-numeric: normal; }
+
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+  .note {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+  .note b { color: var(--text-primary); }
+</style>
+</head>
+<body>
+<div class="viz-root" id="vizRoot">
+  <div class="frame">
+    <header class="top">
+      <div>
+        <h1>3D Linear Regression on Two Features</h1>
+        <p class="subtitle">
+          Two stages. First, only the raw observations (x1, x2, y) are plotted &mdash; a cloud of
+          points with no model attached. Then, on demand, the plane fitted by ordinary least squares
+          (closed-form normal equations, computed in this page) is added on top. Drag the plot to
+          rotate it at either stage.
+        </p>
+      </div>
+      <button class="theme-toggle" id="themeToggle">Dark mode</button>
+    </header>
+
+    <div class="layout">
+      <div class="card" id="plot-card">
+        <div id="plot"></div>
+        <div class="reveal-bar">
+          <span class="step-label" id="stepLabel"><b>Step 1</b> &mdash; raw data points only</span>
+          <button class="reveal-btn" id="revealBtn">Fit &amp; show regression plane</button>
+        </div>
+      </div>
+
+      <aside class="card panel">
+        <div>
+          <p class="section-label">Data generation</p>
+          <div class="control">
+            <label>Sample size (n) <span class="val" id="nVal">60</span></label>
+            <input type="range" id="nSlider" min="10" max="250" step="5" value="60">
+          </div>
+          <div class="control">
+            <label>Noise std. dev. (&sigma;) <span class="val" id="noiseVal">1.5</span></label>
+            <input type="range" id="noiseSlider" min="0" max="5" step="0.1" value="1.5">
+          </div>
+          <div class="control">
+            <label>True intercept b0 <span class="val" id="b0Val">2.0</span></label>
+            <input type="range" id="b0Slider" min="-5" max="5" step="0.5" value="2">
+          </div>
+          <div class="control">
+            <label>True slope b1 (feature x1) <span class="val" id="b1Val">1.2</span></label>
+            <input type="range" id="b1Slider" min="-3" max="3" step="0.1" value="1.2">
+          </div>
+          <div class="control">
+            <label>True slope b2 (feature x2) <span class="val" id="b2Val">-0.8</span></label>
+            <input type="range" id="b2Slider" min="-3" max="3" step="0.1" value="-0.8">
+          </div>
+          <div class="control checkbox-row">
+            <input type="checkbox" id="residualToggle" checked>
+            <label for="residualToggle" style="margin:0;">Show residual lines</label>
+          </div>
+          <div class="btn-row" style="margin-top: 14px;">
+            <button class="action primary" id="regenBtn">Regenerate data</button>
+            <button class="action" id="resetCamBtn">Reset view</button>
+          </div>
+        </div>
+
+        <div>
+          <p class="section-label">Fitted model (OLS)</p>
+          <div class="eq" id="fittedEq">&yacute; = b0 + b1&middot;x1 + b2&middot;x2</div>
+          <div class="stat-row"><span>R&sup2; (fit quality)</span><span class="stat-val" id="r2Val">&mdash;</span></div>
+          <div class="stat-row"><span>Residual std. error</span><span class="stat-val" id="rseVal">&mdash;</span></div>
+          <div class="stat-row"><span>n observations</span><span class="stat-val" id="nStatVal">&mdash;</span></div>
+        </div>
+
+        <div>
+          <p class="section-label">Legend</p>
+          <div class="legend-row"><span class="swatch" style="background: var(--series-1);"></span>Data points</div>
+          <div class="legend-row" style="margin-top:6px;"><span class="swatch" style="background: var(--series-2); opacity:0.7;"></span>Fitted regression plane</div>
+          <div class="legend-row" style="margin-top:6px;"><span class="swatch" style="background: var(--residual-line);"></span>Residual (point &minus; plane)</div>
+        </div>
+
+        <div class="note">
+          <b>Method.</b> The fitted coefficients minimize the sum of squared residuals
+          &Sigma;(y<sub>i</sub> &minus; &yacute;<sub>i</sub>)&sup2; over the training points, solved directly via the
+          normal equations (X&#7488;X)&minus;&sup1;X&#7488;y with X = [1, x1, x2]. Because the data is synthetic,
+          the fitted coefficients can be compared directly against the true ones used to generate it;
+          expect them to converge as n grows and &sigma; shrinks, not to match exactly at finite n.
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- Theme toggle ----------
+  var root = document.documentElement;
+  var themeToggle = document.getElementById("themeToggle");
+  function applyThemeLabel() {
+    var isDark = root.getAttribute("data-theme") === "dark" ||
+      (!root.getAttribute("data-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    themeToggle.textContent = isDark ? "Light mode" : "Dark mode";
+  }
+  themeToggle.addEventListener("click", function () {
+    var current = root.getAttribute("data-theme");
+    var isDark = current === "dark" || (!current && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    root.setAttribute("data-theme", isDark ? "light" : "dark");
+    applyThemeLabel();
+    setTimeout(renderPlot, 0);
+  });
+  applyThemeLabel();
+
+  function cssVar(name) {
+    return getComputedStyle(document.getElementById("vizRoot")).getPropertyValue(name).trim();
+  }
+
+  // ---------- RNG: Gaussian noise via Box-Muller ----------
+  function gaussianNoise() {
+    var u1 = Math.random() || 1e-9;
+    var u2 = Math.random();
+    return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+  }
+
+  // ---------- 3x3 linear solve via Cramer's rule ----------
+  function det3(m) {
+    return (
+      m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+      m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+      m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+    );
+  }
+  function solve3x3(A, b) {
+    var D = det3(A);
+    if (Math.abs(D) < 1e-10) return [0, 0, 0]; // degenerate, guard against div by ~0
+    var results = [];
+    for (var col = 0; col < 3; col++) {
+      var Ai = A.map(function (row) { return row.slice(); });
+      for (var r = 0; r < 3; r++) Ai[r][col] = b[r];
+      results.push(det3(Ai) / D);
+    }
+    return results;
+  }
+
+  // Ordinary least squares for y = b0 + b1*x1 + b2*x2, fit via normal equations.
+  function fitOLS(x1, x2, y) {
+    var n = x1.length;
+    var Sx1 = 0, Sx2 = 0, Sx1x1 = 0, Sx2x2 = 0, Sx1x2 = 0, Sy = 0, Sx1y = 0, Sx2y = 0;
+    for (var i = 0; i < n; i++) {
+      Sx1 += x1[i]; Sx2 += x2[i];
+      Sx1x1 += x1[i] * x1[i]; Sx2x2 += x2[i] * x2[i]; Sx1x2 += x1[i] * x2[i];
+      Sy += y[i]; Sx1y += x1[i] * y[i]; Sx2y += x2[i] * y[i];
+    }
+    var A = [
+      [n,   Sx1,   Sx2],
+      [Sx1, Sx1x1, Sx1x2],
+      [Sx2, Sx1x2, Sx2x2]
+    ];
+    var b = [Sy, Sx1y, Sx2y];
+    var coeffs = solve3x3(A, b); // [b0, b1, b2]
+
+    var yhat = x1.map(function (v, i) { return coeffs[0] + coeffs[1] * x1[i] + coeffs[2] * x2[i]; });
+    var ssRes = 0, ssTot = 0;
+    var yMean = Sy / n;
+    for (i = 0; i < n; i++) {
+      ssRes += Math.pow(y[i] - yhat[i], 2);
+      ssTot += Math.pow(y[i] - yMean, 2);
+    }
+    var r2 = ssTot > 1e-12 ? 1 - ssRes / ssTot : 1;
+    var dof = Math.max(n - 3, 1);
+    var rse = Math.sqrt(ssRes / dof);
+
+    return { b0: coeffs[0], b1: coeffs[1], b2: coeffs[2], r2: r2, rse: rse, yhat: yhat };
+  }
+
+  // ---------- Data generation ----------
+  var state = { x1: [], x2: [], y: [] };
+
+  function generateData(n, sigma, trueB0, trueB1, trueB2) {
+    var x1 = [], x2 = [], y = [];
+    for (var i = 0; i < n; i++) {
+      var a = (Math.random() * 10) - 5;  // uniform [-5, 5]
+      var c = (Math.random() * 10) - 5;
+      var target = trueB0 + trueB1 * a + trueB2 * c + sigma * gaussianNoise();
+      x1.push(a); x2.push(c); y.push(target);
+    }
+    state = { x1: x1, x2: x2, y: y };
+  }
+
+  // ---------- Controls ----------
+  var els = {
+    n: document.getElementById("nSlider"),
+    noise: document.getElementById("noiseSlider"),
+    b0: document.getElementById("b0Slider"),
+    b1: document.getElementById("b1Slider"),
+    b2: document.getElementById("b2Slider"),
+    residual: document.getElementById("residualToggle"),
+    nVal: document.getElementById("nVal"),
+    noiseVal: document.getElementById("noiseVal"),
+    b0Val: document.getElementById("b0Val"),
+    b1Val: document.getElementById("b1Val"),
+    b2Val: document.getElementById("b2Val"),
+    fittedEq: document.getElementById("fittedEq"),
+    r2Val: document.getElementById("r2Val"),
+    rseVal: document.getElementById("rseVal"),
+    nStatVal: document.getElementById("nStatVal"),
+    regenBtn: document.getElementById("regenBtn"),
+    resetCamBtn: document.getElementById("resetCamBtn"),
+    revealBtn: document.getElementById("revealBtn"),
+    stepLabel: document.getElementById("stepLabel")
+  };
+
+  // Two-stage reveal: points-only until the user asks for the fit.
+  var regressionShown = false;
+
+  function setStage(shown) {
+    regressionShown = shown;
+    if (shown) {
+      els.revealBtn.textContent = "Hide regression plane";
+      els.revealBtn.classList.add("is-shown");
+      els.stepLabel.innerHTML = "<b>Step 2</b> &mdash; OLS-fitted plane and residuals";
+    } else {
+      els.revealBtn.textContent = "Fit & show regression plane";
+      els.revealBtn.classList.remove("is-shown");
+      els.stepLabel.innerHTML = "<b>Step 1</b> &mdash; raw data points only";
+    }
+  }
+
+  function fmt(v, d) { return (v >= 0 ? "+" : "") + v.toFixed(d === undefined ? 3 : d); }
+
+  function syncLabels() {
+    els.nVal.textContent = els.n.value;
+    els.noiseVal.textContent = parseFloat(els.noise.value).toFixed(1);
+    els.b0Val.textContent = parseFloat(els.b0.value).toFixed(1);
+    els.b1Val.textContent = parseFloat(els.b1.value).toFixed(1);
+    els.b2Val.textContent = parseFloat(els.b2.value).toFixed(1);
+  }
+
+  var defaultCamera = { eye: { x: 1.6, y: -1.6, z: 1.1 } };
+
+  function renderPlot() {
+    var fit = fitOLS(state.x1, state.x2, state.y);
+
+    if (regressionShown) {
+      els.fittedEq.innerHTML =
+        "&yacute; = " + fit.b0.toFixed(3) + " " + fmt(fit.b1, 3) + "&middot;x1 " + fmt(fit.b2, 3) + "&middot;x2" +
+        "<br><span class='label'>true:</span> y = " + parseFloat(els.b0.value).toFixed(1) +
+        " " + fmt(parseFloat(els.b1.value), 1) + "&middot;x1 " + fmt(parseFloat(els.b2.value), 1) + "&middot;x2 + noise";
+      els.r2Val.textContent = fit.r2.toFixed(4);
+      els.rseVal.textContent = fit.rse.toFixed(3);
+    } else {
+      els.fittedEq.innerHTML = "&yacute; = ? &nbsp;<span class='label'>(click “Fit &amp; show regression plane”)</span>";
+      els.r2Val.textContent = "—";
+      els.rseVal.textContent = "—";
+    }
+    els.nStatVal.textContent = state.x1.length;
+
+    var seriesBlue = cssVar("--series-1");
+    var seriesOrange = cssVar("--series-2");
+    var residualLine = cssVar("--residual-line");
+    var textPrimary = cssVar("--text-primary");
+    var textMuted = cssVar("--text-muted");
+    var gridline = cssVar("--gridline");
+    var surface1 = cssVar("--surface-1");
+
+    var x1min = Math.min.apply(null, state.x1), x1max = Math.max.apply(null, state.x1);
+    var x2min = Math.min.apply(null, state.x2), x2max = Math.max.apply(null, state.x2);
+    var gridN = 12;
+    var gx = [], gy = [];
+    for (var i = 0; i <= gridN; i++) {
+      gx.push(x1min + (x1max - x1min) * i / gridN);
+      gy.push(x2min + (x2max - x2min) * i / gridN);
+    }
+    var gz = [];
+    for (i = 0; i <= gridN; i++) {
+      var row = [];
+      for (var j = 0; j <= gridN; j++) {
+        row.push(fit.b0 + fit.b1 * gx[j] + fit.b2 * gy[i]);
+      }
+      gz.push(row);
+    }
+
+    var pointsTrace = {
+      type: "scatter3d",
+      mode: "markers",
+      x: state.x1, y: state.x2, z: state.y,
+      marker: { size: 4, color: seriesBlue, line: { color: surface1, width: 0.5 } },
+      hovertemplate: "x1 %{x:.2f}<br>x2 %{y:.2f}<br>y %{z:.2f}<extra></extra>",
+      name: "Data points"
+    };
+
+    var traces = [pointsTrace];
+
+    if (regressionShown) {
+      var planeTrace = {
+        type: "surface",
+        x: gx, y: gy, z: gz,
+        opacity: 0.55,
+        showscale: false,
+        colorscale: [[0, seriesOrange], [1, seriesOrange]],
+        hoverinfo: "skip",
+        contours: { x: { show: false }, y: { show: false }, z: { show: false } },
+        name: "Fitted plane"
+      };
+      traces.unshift(planeTrace);
+
+      if (els.residual.checked) {
+        var rx = [], ry = [], rz = [];
+        for (i = 0; i < state.x1.length; i++) {
+          rx.push(state.x1[i], state.x1[i], null);
+          ry.push(state.x2[i], state.x2[i], null);
+          rz.push(state.y[i], fit.yhat[i], null);
+        }
+        traces.push({
+          type: "scatter3d",
+          mode: "lines",
+          x: rx, y: ry, z: rz,
+          line: { color: residualLine, width: 2 },
+          hoverinfo: "skip",
+          name: "Residuals",
+          opacity: 0.65
+        });
+      }
+    }
+
+    var layout = {
+      autosize: true,
+      margin: { l: 0, r: 0, t: 10, b: 0 },
+      paper_bgcolor: surface1,
+      showlegend: false,
+      scene: {
+        bgcolor: surface1,
+        camera: (window.__lastCamera || defaultCamera),
+        xaxis: { title: "x1 (feature 1)", color: textMuted, gridcolor: gridline, zerolinecolor: gridline, titlefont: { color: textPrimary } },
+        yaxis: { title: "x2 (feature 2)", color: textMuted, gridcolor: gridline, zerolinecolor: gridline, titlefont: { color: textPrimary } },
+        zaxis: { title: "y (target)", color: textMuted, gridcolor: gridline, zerolinecolor: gridline, titlefont: { color: textPrimary } },
+        aspectmode: "cube"
+      },
+      font: { family: "system-ui, -apple-system, Segoe UI, sans-serif", color: textPrimary, size: 11 }
+    };
+
+    Plotly.react("plot", traces, layout, { displaylogo: false, responsive: true });
+  }
+
+  function regenerate() {
+    var n = parseInt(els.n.value, 10);
+    var sigma = parseFloat(els.noise.value);
+    var b0 = parseFloat(els.b0.value);
+    var b1 = parseFloat(els.b1.value);
+    var b2 = parseFloat(els.b2.value);
+    generateData(n, sigma, b0, b1, b2);
+    setStage(false); // fresh data: back to points-only until the user asks for the fit
+    renderPlot();
+  }
+
+  [els.n, els.noise, els.b0, els.b1, els.b2].forEach(function (el) {
+    el.addEventListener("input", function () { syncLabels(); });
+    el.addEventListener("change", function () { regenerate(); });
+  });
+  els.residual.addEventListener("change", renderPlot);
+  els.regenBtn.addEventListener("click", regenerate);
+  els.resetCamBtn.addEventListener("click", function () {
+    window.__lastCamera = null;
+    renderPlot();
+  });
+  els.revealBtn.addEventListener("click", function () {
+    setStage(!regressionShown);
+    renderPlot();
+  });
+
+  syncLabels();
+  setStage(false);
+  regenerate();
+
+  document.getElementById("plot").on("plotly_relayout", function (ev) {
+    if (ev && ev["scene.camera"]) window.__lastCamera = ev["scene.camera"];
+  });
+
+  window.addEventListener("resize", function () { Plotly.Plots.resize("plot"); });
+})();
+</script>
+</body>
+</html>
